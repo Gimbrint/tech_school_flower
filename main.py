@@ -5,6 +5,7 @@ import os
 from keyboard import read_key
 import threading
 import serial
+from Xlib.display import Display
 
 class App:
     def __init__(self, window : tkinter.Tk, window_title, video_source=0, loop_source=0):
@@ -23,17 +24,17 @@ class App:
         # The video currently playing will reference either vid or loop
         self.currently_playing = self.loop
 
+        # Find the screen width and height
+        screen = Display(':0').screen()
+        self.screen_width = screen.width_in_pixels
+        self.screen_height = screen.height_in_pixels
+
         # Create a canvas that can fit the above video source size
         self.border_color = 'black'
         self.bg_color = 'black'
 
-        self.canvas = tkinter.Canvas(window, width = self.vid.width, height = self.vid.height, bg=self.bg_color,highlightbackground=self.border_color)
+        self.canvas = tkinter.Canvas(window, width = self.screen_width, height = self.screen_height, bg=self.bg_color,highlightbackground=self.border_color)
         self.canvas.pack()
-
-        # Retrieve the canvas width and height
-        self.canvas.update()
-        self.canvas_width = self.canvas.winfo_width()
-        self.canvas_height = self.canvas.winfo_height()
 
         # Make the window fullscreen
         self.window.attributes('-fullscreen', True)
@@ -111,13 +112,11 @@ class App:
                     self.currently_playing = self.vid
 
     def resize_frame(self, frame):
-        width_ratio = self.canvas_width / self.currently_playing.width
-        height_ratio = self.canvas_height / self.currently_playing.height
+        width_ratio = self.screen_width / self.currently_playing.width
+        height_ratio = self.screen_height / self.currently_playing.height
 
-        # Stolen from: https://stackoverflow.com/questions/45336645/find-the-closest-number-to-numbers-given-in-a-list-python
-        #
-        # WTF is this and why is it in my code base
-        chosen_ratio = min([width_ratio, height_ratio], key=lambda x:abs(x - 1))
+        # Chosen ratio we are gonna go with
+        chosen_ratio = min(width_ratio, height_ratio)
 
         return cv2.resize(frame, [int(self.currently_playing.width * chosen_ratio), int(self.currently_playing.height * chosen_ratio)])
 
@@ -141,8 +140,8 @@ class MyVideoCapture:
         if self.vid.isOpened():
             ret, frame = self.vid.read()
 
-            #looper part of the function
-            # taken from here: https://stackoverflow.com/a/27890487
+            # Looper part of the function
+            # Taken from here: https://stackoverflow.com/a/27890487
             self.current_frame += 1
 
             if ret:
@@ -153,7 +152,7 @@ class MyVideoCapture:
         else:
             return (ret, None)
 
-    #set video source to 0th frame
+    # Set video source to 0th frame
     def restart_video(self):
         self.current_frame = 0 
         self.vid.set(cv2.CAP_PROP_POS_FRAMES, 0)
