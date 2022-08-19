@@ -1,7 +1,7 @@
 import logging
 import random
 
-class list:
+class listUtility:
     def get_random_item(self, items : list, probabilities : list=None):
         # No probabilities given, so make it evenly distributed
         if probabilities == None:
@@ -19,16 +19,13 @@ class list:
         # Generate a random number
         randomValue = random.random()
 
-        # Current weight (all previous weights + current probability)
-        currentWeight = 0
-
         # Go through each items
         for i in range(0, itemLength, 1):
-            currentWeight += probabilities[i]
-
-            if randomValue < currentWeight:
+            if randomValue < probabilities[i]:
                 # We found our item!
                 return items[i]
+            
+            randomValue -= probabilities[i]
 
     # Generates equal probabilities if none are specified
     def get_default_probabilities(self, items : list) -> list:
