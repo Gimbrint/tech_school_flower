@@ -8,17 +8,20 @@ import serial
 from Xlib.display import Display
 
 class App:
-    def __init__(self, window : tkinter.Tk, window_title, video_source=0, loop_source=0):
+    def __init__(self, window : tkinter.Tk, window_title, loop_folder=os.getcwd(), video_source=0):
         self.window = window
         self.window.title(window_title)
         self.video_source = video_source
-        self.loop_source = loop_source
+
+        # Open loop videos
+        self.loop_folder = loop_folder
+        self.loop_videos = self.open_videos(loop_folder)
 
         # Get rid of the cursor, for this window
         window.config(cursor='none')
 
-        # Open loop source and video source
-        self.loop = MyVideoCapture(self.loop_source, loop=True)
+        # Open loop source and video sourc
+        self.loop = self.select_random_video(self.loop_videos)
         self.vid = MyVideoCapture(self.video_source)
 
         # The video currently playing will reference either vid or loop
@@ -58,7 +61,6 @@ class App:
         self.window.mainloop()
 
     def update(self):
-
         # If the thread determines the user pressed esc, kill the app
         if self.last_input == 'esc':
             exit()
@@ -78,6 +80,9 @@ class App:
         # Fyi, if the current frame happens to be the last one, it restarts the video and sets it to the loop
         if self.currently_playing.current_frame == self.currently_playing.total_frame_count:
             self.currently_playing.restart_video()
+
+            # Switch to loop
+            self.select_random_video(self.loop_videos)
             self.currently_playing = self.loop
 
         # If the video frame is obtained successfully, render it on screen
@@ -87,6 +92,21 @@ class App:
             self.canvas.create_image(self.window.winfo_width() / 2, self.window.winfo_height() / 2, image=self.photo, anchor=tkinter.CENTER)
 
         self.window.after(self.delay, self.update)
+
+    def open_videos(self, folderPath : str, loop : bool=False) -> list:
+        videos = list()
+        fileNames = os.listdir(folderPath)
+
+        # Load in each video in the designated folder
+        for name in fileNames:
+            filePath = folderPath + '/' + name
+            videos.append(MyVideoCapture(filePath, loop))
+
+        return videos
+
+    def select_random_video(self, videos : list):
+        from randomUtility import list as randut
+        return randut.get_random_item(self=randut, items=videos)
 
     def add_input(self):
         # Creates a listener that (for now) registers all keyboard events
@@ -156,7 +176,6 @@ class MyVideoCapture:
     def restart_video(self):
         self.current_frame = 0 
         self.vid.set(cv2.CAP_PROP_POS_FRAMES, 0)
-        
 
     # Release the video source when the object is destroyed
     def __del__(self):
@@ -168,7 +187,7 @@ if __name__ == '__main__':
     #
     # NOTE: GIF files break everything, for some reason,
     #       Frame counts are broken as fuck
+    loop_folder = os.getcwd() + "/LoopVideos"
     video_source = os.getcwd() + "/text_short.mp4"
-    loop_source = os.getcwd() + "/arrow.mp4"
 
-    App(tkinter.Tk(), video_source, video_source=video_source, loop_source=loop_source)
+    App(tkinter.Tk(), video_source, video_source=video_source, loop_folder=loop_folder)
