@@ -1,3 +1,4 @@
+from time import time
 import tkinter
 import cv2
 import PIL.Image, PIL.ImageTk
@@ -5,32 +6,41 @@ import os
 from keyboard import read_key
 import threading
 import serial
-from Xlib.display import Display
+#from Xlib.display import Display
 
 class App:
-    def __init__(self, window : tkinter.Tk, window_title, loop_folder=os.getcwd(), video_source=0):
+    def __init__(self, window : tkinter.Tk, window_title, video_folder=0, video_name=0, close_videos : list=list, far_videos : list=list):
         self.window = window
         self.window.title(window_title)
-        self.video_source = video_source
+        self.video_name = video_name
 
-        # Open loop videos
-        self.loop_folder = loop_folder
-        self.loop_videos = self.open_videos(loop_folder)
+        # Open videos
+        self.video_folder = video_folder
+        self.videos = self.init_videos(video_folder=video_folder)
+
+        # Select videos to play
+        self.close_videos = close_videos
+        self.far_videos = far_videos
+        self.current_videos = far_videos
+
+        self.playing_close = False
 
         # Get rid of the cursor, for this window
         window.config(cursor='none')
 
-        # Open loop source and video sourc
-        self.loop = self.select_random_video(self.loop_videos)
-        self.vid = MyVideoCapture(self.video_source)
+        # Set the loop video and touched video
+        self.loop = self.videos[self.select_random_video(self.far_videos)]
+        self.vid = self.videos[self.video_name]
 
         # The video currently playing will reference either vid or loop
-        self.currently_playing = self.loop
+        self.currently_playing : MyVideoCapture = self.loop
 
         # Find the screen width and height
-        screen = Display(':0').screen()
-        self.screen_width = screen.width_in_pixels
-        self.screen_height = screen.height_in_pixels
+        #screen = Display(':0').screen()
+        #self.screen_width = screen.width_in_pixels
+        #self.screen_height = screen.height_in_pixels
+        self.screen_width = window.winfo_screenwidth()
+        self.screen_height = window.winfo_screenheight()
 
         # Create a canvas that can fit the above video source size
         self.border_color = 'black'
@@ -47,7 +57,7 @@ class App:
         input_thread.daemon = True #<-- makes the thread destroyable
         input_thread.start()
 
-        sensor_thread = threading.Thread(target=self.add_distance_check)
+        sensor_thread = threading.Thread(target=self.add_sensor_thread)
         sensor_thread.daemon = True #<-- makes the thread destroyable
         sensor_thread.start()
 
@@ -82,8 +92,9 @@ class App:
             self.currently_playing.restart_video()
 
             # Switch to loop
-            self.select_random_video(self.loop_videos)
+            self.loop = self.videos[self.select_random_video(self.current_videos)]
             self.currently_playing = self.loop
+            self.playing_close = False
 
         # If the video frame is obtained successfully, render it on screen
         if ret:
@@ -93,43 +104,54 @@ class App:
 
         self.window.after(self.delay, self.update)
 
-    def open_videos(self, folderPath : str, loop : bool=False) -> list:
-        videos = list()
-        fileNames = os.listdir(folderPath)
+    def init_videos(self, video_folder : str) -> dict:
+        videos = dict()
 
-        # Load in each video in the designated folder
-        for name in fileNames:
-            filePath = folderPath + '/' + name
-            videos.append(MyVideoCapture(filePath, loop))
+        for name in os.listdir(video_folder):
+            videos[name] = MyVideoCapture(video_folder + '/' + name)
 
         return videos
-
+    
     def select_random_video(self, videos : list):
-        from randomUtility import list as randut
+        from randomUtility import listUtility as randut
         return randut.get_random_item(self=randut, items=videos)
 
     def add_input(self):
-        # Creates a listener that (for now) registers all keyboard events
+        # Creates a listener that registers all keyboard events
         while True:
             self.last_input = read_key()
             #print(self.last_input)
 
-    def add_distance_check(self):
-        # Creates a listener that registers the distance of the object
+    def add_sensor_thread(self):
+        # Creates a listener that deals with reading from the sensors
         # that the UltraSound sensor had detected
-        ser = serial.Serial('/dev/ttyUSB0', 9600, timeout=1)
+        #ser = serial.Serial('/dev/ttyUSB0', 9600, timeout=1)
+        ser = serial.Serial('COM7', 9600, timeout=1)
         ser.reset_input_buffer()
 
         while True:
             if ser.in_waiting > 0:
-                line = ser.readline().decode('utf-8').rstrip()
+                data = ser.readline().decode('utf-8', errors='replace').rstrip().split(' ')
                 min_distance = 50
 
-                #print(line)
+                if data.__len__() == 2 and self.currently_playing == self.loop:
+                    if int(data[1]) == 1:
+                        # Change to the video
+                        self.currently_playing.restart_video()
+                        self.currently_playing = self.vid
+                        self.playing_close = False
+                        pass
+                    elif int(data[0]) <= min_distance and not self.playing_close:
+                        # Come closer kid!
+                        self.current_videos = self.close_videos
+                        self.currently_playing.restart_video()
+                        self.loop = self.videos[self.select_random_video(self.current_videos)]
+                        self.currently_playing = self.loop
 
-                if self.currently_playing == self.loop and int(line) <= min_distance:
-                    # Change to the video
-                    self.currently_playing = self.vid
+                        self.playing_close = True
+                    else:
+                        # Please use me :(
+                        self.current_videos = far_videos
 
     def resize_frame(self, frame):
         width_ratio = self.screen_width / self.currently_playing.width
@@ -182,12 +204,32 @@ class MyVideoCapture:
         if self.vid.isOpened():
             self.vid.release()
 
+def read_all_video_path(videoTxtPath : str=0) -> list:
+    videos = open(videoTxtPath).readlines()
+
+    for (i, video) in enumerate(videos):
+        # Remove all whitespaces
+        videos[i] = video.strip()
+
+    return videos
+
 if __name__ == '__main__':
     # Create a window and pass it to the Application object
     #
     # NOTE: GIF files break everything, for some reason,
     #       Frame counts are broken as fuck
-    loop_folder = os.getcwd() + "/LoopVideos"
-    video_source = os.getcwd() + "/text_short.mp4"
+    video_folder = os.getcwd() + '/Videos'
+    video_name = 'text_short.mp4'
 
-    App(tkinter.Tk(), video_source, video_source=video_source, loop_folder=loop_folder)
+    loop_folder = os.getcwd() + '/LoopVideos'
+    close_videos = read_all_video_path(loop_folder + '/Close.txt')
+    far_videos = read_all_video_path(loop_folder + '/Far.txt')
+
+    App(
+        window=tkinter.Tk(),
+        window_title='App',
+        video_folder=video_folder,
+        video_name=video_name,
+        close_videos=close_videos,
+        far_videos=far_videos
+    )

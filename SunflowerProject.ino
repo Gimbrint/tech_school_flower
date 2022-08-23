@@ -29,10 +29,8 @@ static unsigned long pump_last_end = 0;
 static bool pump_used = false;
 static bool pump_end = false;
 
-static long pump_duration = 1000;
+static long pump_duration = 3000;
 static long pump_cooldown = 1500;
-
-// TODO: Implement threads and pump trigger
 
 void setup() {
   // Set up pins
@@ -49,7 +47,7 @@ void setup() {
 
 void loop() {
   // Start the threads
-  thread(&pt1);
+  infraredThread(&pt1);
   
   // Send an UltraSound signal
   digitalWrite(TrigPin, LOW);
@@ -64,10 +62,12 @@ void loop() {
   // The distance between the sensor and object
   distance = duration * 0.017;
 
-  Serial.println(distance);
+  Serial.print(distance);
+  Serial.print(" ");
+  Serial.println(pump_used);
 }
 
-static int thread(struct pt *pt) {
+static int infraredThread(struct pt *pt) {
   static unsigned int lastTick;
   
   PT_BEGIN(pt);
