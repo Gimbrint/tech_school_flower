@@ -1,4 +1,3 @@
-from time import time
 import tkinter
 import cv2
 import PIL.Image, PIL.ImageTk
@@ -6,7 +5,6 @@ import os
 from keyboard import read_key
 import threading
 import serial
-#from Xlib.display import Display
 
 class App:
     def __init__(self, window : tkinter.Tk, window_title, video_folder=0, video_name=0, close_videos : list=list, far_videos : list=list):
@@ -36,9 +34,6 @@ class App:
         self.currently_playing : MyVideoCapture = self.loop
 
         # Find the screen width and height
-        #screen = Display(':0').screen()
-        #self.screen_width = screen.width_in_pixels
-        #self.screen_height = screen.height_in_pixels
         self.screen_width = window.winfo_screenwidth()
         self.screen_height = window.winfo_screenheight()
 
